@@ -1,3 +1,6 @@
 # Build files
 mcdppy.egg-info/
 dist/
+
+# Caches
+.mypy_cache/
