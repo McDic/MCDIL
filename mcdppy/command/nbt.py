@@ -1,3 +1,4 @@
+import re
 import typing
 from enum import Enum
 from enum import auto as enumauto
@@ -6,7 +7,9 @@ T = typing.TypeVar("T")
 
 PRIMITIVE_LITERAL_NBT_TYPE = typing.Union[int, float, bool, str, bytearray]
 LITERAL_NBT_TYPE = typing.Union[
-    PRIMITIVE_LITERAL_NBT_TYPE, list["LITERAL_NBT_TYPE"], dict[str, "LITERAL_NBT_TYPE"]
+    PRIMITIVE_LITERAL_NBT_TYPE,
+    typing.Sequence["LITERAL_NBT_TYPE"],
+    typing.Mapping[str, "LITERAL_NBT_TYPE"],
 ]
 
 
@@ -45,225 +48,243 @@ class NBT:
     """
 
     # Type helpers
-    POSSIBLE_TYPES = typing.Union[PRIMITIVE_LITERAL_NBT_TYPE, list[T], dict[str, T]]
+    POSSIBLE_TYPES = typing.Union[
+        PRIMITIVE_LITERAL_NBT_TYPE,
+        typing.Sequence[typing.Union["POSSIBLE_TYPES", T]],
+        typing.Mapping[str, typing.Union["POSSIBLE_TYPES", T]],
+    ]
+    INT_INDEX_SYNTAX: typing.Final[re.Pattern] = re.compile(r"^\[[0-9]+\]$")
 
     # Member variables which is needed to declared here because of type aliases
     _value: POSSIBLE_TYPES[typing.Self]
+    _type: IndividualNBTTypes
 
     def __init__(
         self,
         value: typing.Union[POSSIBLE_TYPES[typing.Self], LITERAL_NBT_TYPE, typing.Self],
         type_: typing.Optional[IndividualNBTTypes] = None,
-        parent: typing.Optional[typing.Self] = None,
+        parents: typing.Optional[dict[typing.Union[int, str], typing.Self]] = None,
     ):
         """
         If `type_` is `None`, then it will automatically
         choose the appropriate type. Otherwise, it will check
         if the type of given `value` and `type_` are actually matching.
         """
-        candidate_type: IndividualNBTTypes = IndividualNBTTypes.Bool
         if type_ is None:
             if isinstance(value, NBT):  # Copying
-                candidate_type = value._type
+                self._type = value._type
             elif isinstance(value, bool):
-                candidate_type = IndividualNBTTypes.Bool
+                self._type = IndividualNBTTypes.Bool
             elif isinstance(value, int):
-                candidate_type = IndividualNBTTypes.Int
+                self._type = IndividualNBTTypes.Int
             elif isinstance(value, float):
-                candidate_type = IndividualNBTTypes.Double
+                self._type = IndividualNBTTypes.Double
             elif isinstance(value, str):
-                candidate_type = IndividualNBTTypes.Float
+                self._type = IndividualNBTTypes.Float
             elif isinstance(value, list):
-                candidate_type = IndividualNBTTypes.List
+                self._type = IndividualNBTTypes.List
             elif isinstance(value, dict):
-                candidate_type = IndividualNBTTypes.Compound
+                self._type = IndividualNBTTypes.Compound
             elif isinstance(value, bytearray):
-                candidate_type = IndividualNBTTypes.ByteArray
+                self._type = IndividualNBTTypes.ByteArray
             else:
                 raise ValueError(
                     "Cannot automatically deduce the type from given value type(%s)"
                     % (type(value),)
                 )
         else:
-            candidate_type = type_
-            if isinstance(value, NBT) and candidate_type is not value._type:
+            if isinstance(value, NBT) and type_ is not value._type:
                 raise ValueError(
-                    "You passed different type for NBT: %s vs %s"
-                    % (value._type, candidate_type)
+                    "You passed different type for NBT: %s vs %s" % (value._type, type_)
                 )
+            self._type = type_
 
-        self._value = self.clean(value, candidate_type)
-        self._type: IndividualNBTTypes = candidate_type
-        self._parent: typing.Optional[typing.Self] = parent
-        self._path_cache: str = self.search_path(parent, self)
+        self._value = self.clean(value)
+        self._parents: dict[str, typing.Self] = {}  # {access_index: NBT}
+        self.add_parents(parents or {})
+
+    def is_primitive(self) -> bool:
+        """
+        Return if this NBT is primitive.
+        """
+        return self._type in {
+            IndividualNBTTypes.Bool,
+            IndividualNBTTypes.Byte,
+            IndividualNBTTypes.Short,
+            IndividualNBTTypes.Int,
+            IndividualNBTTypes.Long,
+            IndividualNBTTypes.Float,
+            IndividualNBTTypes.Double,
+            IndividualNBTTypes.String,
+        }
+
+    def is_list(self):
+        """
+        Return if this NBT is list type.
+        """
+        return self._type in {
+            IndividualNBTTypes.List,
+            IndividualNBTTypes.ByteArray,
+            IndividualNBTTypes.IntArray,
+            IndividualNBTTypes.LongArray,
+        }
+
+    def add_parents(self, parents: dict[typing.Union[int, str], typing.Self]):
+        """
+        Add parents with checking type validity.
+        """
+        for index, parent in parents.items():
+            if index in self._parents:
+                raise ValueError(
+                    "Parent index(%s) for this NBT already exists" % (index,)
+                )
+            elif isinstance(index, int):
+                if not parent.is_list():
+                    raise ValueError("Parent NBT type must be list for int index")
+                elif {
+                    IndividualNBTTypes.List: self._type,
+                    IndividualNBTTypes.ByteArray: IndividualNBTTypes.Byte,
+                    IndividualNBTTypes.Int: IndividualNBTTypes.Int,
+                    IndividualNBTTypes.LongArray: IndividualNBTTypes.Long,
+                }[parent._type] is not self._type:
+                    raise ValueError(
+                        "Parent type is typed list(%s) but child type is %s"
+                        % (parent._type, self._type)
+                    )
+                self._parents["[%d]" % (index,)] = parent
+            elif isinstance(index, str):
+                if parent._type is not IndividualNBTTypes.Compound:
+                    raise ValueError("Parent NBT type must be compound for str index")
+                self._parents[index] = parent
+            else:
+                raise ValueError(
+                    "Unsupported; Parent NBT type is %s and index is %s (type %s)"
+                    % (parent._type, index, type(index))
+                )
 
     def __str__(self) -> str:
         match self._type:
             case IndividualNBTTypes.Bool:
+                assert isinstance(self._value, bool)
                 return "true" if self._value else "false"
             case IndividualNBTTypes.Byte:
-                return "%db" % (typing.cast(int, self._value),)
+                assert isinstance(self._value, int)
+                return "%db" % (self._value,)
             case IndividualNBTTypes.Short:
-                return "%ds" % (typing.cast(int, self._value),)
+                assert isinstance(self._value, int)
+                return "%ds" % (self._value,)
             case IndividualNBTTypes.Int:
-                return "%d" % (typing.cast(int, self._value),)
+                assert isinstance(self._value, int)
+                return "%d" % (self._value,)
             case IndividualNBTTypes.Long:
-                return "%dL" % (typing.cast(int, self._value),)
+                assert isinstance(self._value, int)
+                return "%dL" % (self._value,)
             case IndividualNBTTypes.Float:
-                return "%.6gf" % (typing.cast(float, self._value),)
+                assert isinstance(self._value, float)
+                return "%.6gf" % (self._value,)
             case IndividualNBTTypes.Double:
-                return "%.6gD" % (typing.cast(float, self._value),)
+                assert isinstance(self._value, float)
+                return "%.6gD" % (self._value,)
             case IndividualNBTTypes.String:
                 assert isinstance(self._value, str)
                 return self._value
             case IndividualNBTTypes.List:
-                assert isinstance(self._value, typing.Iterable)
+                assert isinstance(self._value, typing.Sequence)
                 return "[" + ",".join(str(subvalue) for subvalue in self._value) + "]"
             case IndividualNBTTypes.Compound:
                 assert isinstance(self._value, dict)
                 return (
                     "{"
                     + ",".join(
-                        "%s:%s" % (key, subvalue)
+                        '"%s":%s' % (key, subvalue)
                         for key, subvalue in self._value.items()
                     )
                     + "}"
                 )
             case IndividualNBTTypes.ByteArray:
-                assert isinstance(self._value, typing.Iterable)
+                assert isinstance(self._value, typing.Sequence)
                 return "[B;" + ",".join(str(x) for x in self._value) + "]"
             case IndividualNBTTypes.IntArray:
-                assert isinstance(self._value, typing.Iterable)
+                assert isinstance(self._value, typing.Sequence)
                 return "[I;" + ",".join(str(x) for x in self._value) + "]"
             case IndividualNBTTypes.LongArray:
-                assert isinstance(self._value, typing.Iterable)
+                assert isinstance(self._value, typing.Sequence)
                 return "[L;" + ",".join(str(x) for x in self._value) + "]"
         raise NotImplementedError("Not implemented for NBT type %s" % (self._type,))
-
-    def __getitem__(self, key: typing.Union[str, int]):
-        key = key if isinstance(key, str) else "[%d]" % (key,)
-
-    @classmethod
-    def search_path(
-        cls, parent: typing.Optional[typing.Self], child: typing.Self
-    ) -> str:
-        """
-        Find a path of child from direct parent.
-        This method uses `is` operator for here.
-        Note that this should not be called explicitly as cache
-        will be stored internally on calling constructor.
-        """
-        if parent is None:  # Child is root
-            return ""
-        elif isinstance(parent._value, (int, float, bool, str)):
-            raise ValueError("Parent is primitive NBT, which does not have any child")
-        elif isinstance(parent._value, list):
-            for i, candidate_child in enumerate(parent._value):
-                if candidate_child is child:
-                    return "[%d]" % (i,)
-            else:
-                raise ValueError("Parent's list does not have the given child")
-        elif isinstance(parent._value, dict):
-            for key, candidate_child in parent._value.items():
-                if candidate_child is child:
-                    return key
-            else:
-                raise ValueError("Parent's compound does not have the given child")
-        else:
-            raise ValueError("Invalid parent value type %s" % (type(parent._value),))
 
     def clean(
         self,
         value: typing.Union[POSSIBLE_TYPES[typing.Self], LITERAL_NBT_TYPE, typing.Self],
-        type_: IndividualNBTTypes,
     ) -> POSSIBLE_TYPES[typing.Self]:
         """
         Performs type check and initialize corresponding child objects.
         """
         if isinstance(value, NBT):
-            if value._type is not type_:
+            if value._type is not self._type:
                 raise ValueError(
                     "NBT type(%s) is not equal to given type_(%s)"
-                    % (value._type, type_)
+                    % (value._type, self._type)
                 )
             return value._value  # type: ignore # maybe mypy bug
 
-        match type_:
-            # Primitive types
-            case (
-                IndividualNBTTypes.Bool
-                | IndividualNBTTypes.Byte
-                | IndividualNBTTypes.Short
-                | IndividualNBTTypes.Int
-                | IndividualNBTTypes.Long
-                | IndividualNBTTypes.Float
-                | IndividualNBTTypes.Double
-                | IndividualNBTTypes.String
-            ):
-                target_primitive_type = {
-                    IndividualNBTTypes.Bool: bool,
-                    IndividualNBTTypes.Byte: int,
-                    IndividualNBTTypes.Short: int,
-                    IndividualNBTTypes.Int: int,
-                    IndividualNBTTypes.Long: int,
-                    IndividualNBTTypes.Float: float,
-                    IndividualNBTTypes.Double: float,
-                    IndividualNBTTypes.String: str,
-                }[type_]
-                if not isinstance(value, target_primitive_type):
-                    raise TypeError(
-                        "Invalid value %s given for primitive NBT %s" % (value, type_)
-                    )
-                return value  # type: ignore # maybe mypy bug
+        if self.is_primitive():
+            target_primitive_type = {
+                IndividualNBTTypes.Bool: bool,
+                IndividualNBTTypes.Byte: int,
+                IndividualNBTTypes.Short: int,
+                IndividualNBTTypes.Int: int,
+                IndividualNBTTypes.Long: int,
+                IndividualNBTTypes.Float: float,
+                IndividualNBTTypes.Double: float,
+                IndividualNBTTypes.String: str,
+            }[self._type]
+            if not isinstance(value, target_primitive_type):
+                raise TypeError(
+                    "Invalid value %s given for primitive NBT %s" % (value, self._type)
+                )
+            return value  # type: ignore # maybe mypy bug
 
-            # Lists
-            case (
-                IndividualNBTTypes.List
-                | IndividualNBTTypes.ByteArray
-                | IndividualNBTTypes.IntArray
-                | IndividualNBTTypes.LongArray
-            ):
-                if not isinstance(value, (list, bytearray)):
-                    raise TypeError("Invalid value %s given for NBT list" % (value,))
-                subtype: typing.Optional[IndividualNBTTypes] = {
-                    IndividualNBTTypes.List: None,
-                    IndividualNBTTypes.ByteArray: IndividualNBTTypes.Byte,
-                    IndividualNBTTypes.IntArray: IndividualNBTTypes.Int,
-                    IndividualNBTTypes.LongArray: IndividualNBTTypes.Long,
-                }[type_]
-                return [
-                    type(self)(subvalue, type_=subtype, parent=self)
-                    for subvalue in value
-                ]
+        elif self.is_list():
+            if not isinstance(value, (list, bytearray)):
+                raise TypeError("Invalid value %s given for NBT list" % (value,))
+            subtype: typing.Optional[IndividualNBTTypes] = {
+                IndividualNBTTypes.List: None,
+                IndividualNBTTypes.ByteArray: IndividualNBTTypes.Byte,
+                IndividualNBTTypes.IntArray: IndividualNBTTypes.Int,
+                IndividualNBTTypes.LongArray: IndividualNBTTypes.Long,
+            }[self._type]
+            return [
+                type(self)(subvalue, type_=subtype, parents={i: self})
+                for i, subvalue in enumerate(value)
+            ]
 
-            # Compound
-            case IndividualNBTTypes.Compound:
-                if not isinstance(value, dict):
-                    raise TypeError(
-                        "Invalid value %s given for NBT compound" % (value,)
-                    )
-                return {
-                    key: (
-                        type(self)(subvalue, parent=self)
-                        if not isinstance(subvalue, type(self))
-                        else subvalue
-                    )
-                    for key, subvalue in value.items()
-                }
+        elif self._type is IndividualNBTTypes.Compound:
+            if not isinstance(value, dict):
+                raise TypeError("Invalid value %s given for NBT compound" % (value,))
+            return {
+                key: (
+                    type(self)(subvalue, parents={key: self})
+                    if not isinstance(subvalue, type(self))
+                    else subvalue
+                )
+                for key, subvalue in value.items()
+            }
 
-            # Unsupported
-            case _:
-                raise ValueError("Unsupported type_(%s) given" % (type_,))
+        else:
+            raise ValueError("Unsupported type_(%s) given" % (self._type,))
 
-    def get_full_path(self) -> str:
-        """
-        Get the full path of this NBT.
-        Note that `path.[index]` is legal in Minecraft.
-        """
-        paths: list[str] = []
-        # mypy bug: https://github.com/python/mypy/issues/16418
-        current: typing.Optional[typing.Self] = self  # type: ignore
-        while current is not None and current._path_cache:
-            paths.append(current._path_cache)
-            current = current._parent
-        return ".".join(reversed(paths))
+    def __getitem__(self, key: typing.Union[str, int]) -> typing.Self:
+        if self.is_primitive():
+            raise ValueError("Cannot index for primitive NBT types")
+        elif self.is_list():
+            if not isinstance(key, int):
+                raise ValueError("Invalid key %s for accessing child" % (key,))
+            assert isinstance(self._value, list)
+            return self._value[key]
+        elif self._type is IndividualNBTTypes.Compound:
+            if not isinstance(key, str):
+                raise ValueError("Invalid key %s for accessing child" % (key,))
+            assert isinstance(self._value, dict)
+            return self._value[key]
+        else:
+            raise ValueError("Unsupported NBT type %s" % (self._type,))

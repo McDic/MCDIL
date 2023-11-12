@@ -56,6 +56,8 @@ class Datapack:
         """
         Generate a datapack on given `root_path`.
         """
+        raise NotImplementedError
+
         root_path = Path(root_path)
         if root_path.exists():
             if not overwrite:
@@ -78,4 +80,3 @@ class Datapack:
         (root_path / "data").mkdir()
         main_namespace_path = root_path / "data" / self._namespace
         main_namespace_path.mkdir()
-        raise NotImplementedError

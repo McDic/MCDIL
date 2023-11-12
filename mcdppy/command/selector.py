@@ -5,11 +5,15 @@ from dataclasses import dataclass
 from ..utils import merge_dict, modify_dict
 from .constants import Gamemode, SortingMode
 from .nbt import NBT
-from .team import Team
+from .sgo import Team
 from .valuerange import ValueRange
 
+if typing.TYPE_CHECKING:
+    from . import *
+
+
 T = typing.TypeVar("T")
-T_ADV = typing.Union[bool, dict[str, "T_ADV"]]
+T_ADVANCEMENT = typing.Union[bool, dict[str, "T_ADVANCEMENT"]]
 
 
 def _keep_int_and_float(v) -> typing.Union[int, float]:
@@ -22,9 +26,9 @@ def _keep_int_and_float(v) -> typing.Union[int, float]:
         return float(v)
 
 
-def _single_strize_advancement(v: T_ADV) -> str:
+def _single_strize_advancement(v: T_ADVANCEMENT) -> str:
     """
-    Recursive function to strize advancement conditions.
+    Recursive utility function to strize advancement conditions.
     """
     if isinstance(v, bool):
         return "true" if v else "false"
@@ -45,7 +49,7 @@ class TargetSelector:
     you always get a new object when chaining conditions.
     Therefore it is better to cache some selectors or aggregate
     conditions as much as you can to prevent performance
-    issues in case you are using a lot of conditions.
+    issues in case you are using same selector a lot.
     See: https://minecraft.fandom.com/wiki/Target_selectors
     """
 
@@ -90,7 +94,7 @@ class TargetSelector:
             ),
         ),
         "name": ConditionInfo(
-            (lambda team: Team.get_team(team) if not isinstance(team, Team) else team),
+            (lambda team: Team(team) if not isinstance(team, Team) else team),
             equality_duplicatable=False,
             negatable=True,
         ),
@@ -132,8 +136,7 @@ class TargetSelector:
 
     def __str__(self) -> str:
         condition_str_list: list[str] = []
-        for condition in self.AVAILABLE_CONDITIONS:
-            pass
+        raise NotImplementedError
         return self._main_target + (
             "" if not condition_str_list else f"[{','.join(condition_str_list)}]"
         )
@@ -407,22 +410,3 @@ class TargetSelector:
         Add `sort=blabla`.
         """
         return deepcopy(self)._set_condition("sort", sorting_mode)
-
-
-class Command:
-    """
-    Base class of all single commands.
-    """
-
-    def __init__(self, raw_command: str):
-        self._command: str = raw_command
-
-    @property
-    def command(self) -> str:
-        """
-        Generate the current command.
-        """
-        return self._command
-
-    def __str__(self) -> str:
-        return self.command

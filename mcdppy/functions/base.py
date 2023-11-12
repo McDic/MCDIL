@@ -2,8 +2,11 @@ import os
 import typing
 from pathlib import Path
 
-from ..command import Command
 from ..utils import writeline
+
+
+class Command:
+    pass
 
 
 class AbstractCommandSequence:
@@ -34,13 +37,4 @@ class AbstractFunction:
         elif path.exists():
             os.remove(path)
 
-        with open(path, "w") as mcf_file:
-            for stuff in self._commands:
-                if isinstance(stuff, Command):
-                    writeline(mcf_file, stuff.command)
-                elif isinstance(stuff, AbstractCommandSequence):
-                    pass
-                else:
-                    raise TypeError(
-                        "Invalid command stuff type(%s) found" % (type(stuff),)
-                    )
+        raise NotImplementedError
