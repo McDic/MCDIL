@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from lark import Lark, Transformer, Tree
+from lark import Lark, ParseTree, Transformer
 
 global_mcdil_parser: Lark | None = None
 
@@ -24,10 +24,9 @@ class McDilTransformer(Transformer):
         return []
 
 
-def parse(code: str) -> list[str]:
+def parse(code: str) -> ParseTree:
     parsed_tree = load_grammar().parse(code)
-    print(parsed_tree.pretty())
-    return []
+    return parsed_tree
 
 
 if __name__ == "__main__":
