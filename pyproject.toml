@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcdil"
-version = "0.0.1"
 authors = [
   { name="Minsung Kim", email="spongbob9876@naver.com" },
 ]
@@ -17,7 +16,7 @@ classifiers = [
 ]
 license = {file = "LICENSE"}
 keywords = ["minecraft", "language", "compiler"]
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "version"]
 
 [project.urls]
 "Homepage" = "https://github.com/McDic/MCDIL"
@@ -33,5 +32,6 @@ exclude = ["example*", "dist*", "mcdppy*", "*.egg-info*"]
 mcdil = ["*.lark"]
 
 [tool.setuptools.dynamic]
+version = {attr = "mcdil.VERSION"}
 dependencies = {file = ["requirements.txt"]}
 optional-dependencies = {dev = {file = ["requirements-dev.txt"]}}
