@@ -1,0 +1,129 @@
+// ----------------------------------------------------------------------------
+// Imports
+
+%import common.ESCAPED_STRING   -> STRING
+%import common.SIGNED_INT       -> INT32
+%import common.SIGNED_FLOAT     -> FLOAT
+%import common.CNAME            -> IDENTIFIER
+%import common.CPP_COMMENT
+%import common.C_COMMENT
+
+%import common.WS
+%ignore WS
+
+// ----------------------------------------------------------------------------
+// Primitives
+
+?comment: CPP_COMMENT | C_COMMENT
+
+namespaced_identifier: IDENTIFIER ( "::" IDENTIFIER )*
+
+?literal: INT32         -> int32
+        | FLOAT         -> float
+        | "true"        -> true
+        | "false"       -> false
+        | STRING        -> string
+
+?type_qualifier:  "immutable"   -> immutable
+                | "static"      -> static
+
+?primitive_type:  "int"         -> int32_type
+                | "bool"        -> bool_type
+                | "null"        -> null_type
+
+qualified_type: type_qualifier? primitive_type "*"*
+
+selector: /\@[parse]/
+
+// ----------------------------------------------------------------------------
+// Abstract Statements
+
+program: code_unit+
+
+code_unit: (statement ";") | comment
+
+?statement: simple_statement | command_statement | compound_statement
+
+?simple_statement:    initialization
+                    | assignable_statement
+                    | sleep_statement
+                    | escape_statement
+                    | import_statement
+
+?compound_statement:  function_definition
+                    | while_loop
+                    | for_loop
+                    | branch
+                    | namespace
+
+// ----------------------------------------------------------------------------
+// Simple Statements
+
+initialization: "export"? qualified_type IDENTIFIER "=" assignable_statement
+
+assignable_statement:     namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
+                        | namespaced_identifier "><" namespaced_identifier                                                  -> swap_statement
+                        | "(" assignable_statement ")"                                                                      -> braced_statement
+                        | assignable_statement "[" assignable_statement ("," assignable_statement)* "]"                     -> indexing_statement
+                        | namespaced_identifier                                                                             -> identifier_statement
+                        | literal                                                                                           -> literal_statement
+                        | namespaced_identifier "(" assignable_statement ("," assignable_statement)* ")"                    -> call_statement
+                        | assignable_statement "?" "(" assignable_statement ")" ":" "(" assignable_statement ")"            -> ternary_statement
+                        | assignable_statement general_operator assignable_statement                                        -> general_statement
+
+?general_operator:    "+"   -> op_add
+                    | "-"   -> op_sub
+                    | "*"   -> op_mul
+                    | "/"   -> op_div
+                    | "%"   -> op_mod
+                    | "=="  -> op_eq
+                    | "!="  -> op_ne
+                    | "<"   -> op_lt
+                    | "<="  -> op_le
+                    | ">"   -> op_gt
+                    | ">="  -> op_ge
+
+sleep_statement: "sleep" "(" FLOAT ")"
+
+?alter_operator:  "="   -> assign_op
+                | "+="  -> assign_op_add
+                | "-="  -> assign_op_sub
+                | "*="  -> assign_op_mul
+                | "/="  -> assign_op_div
+                | "%="  -> assign_op_mod
+
+escape_statement:     "return" assignable_statement     -> return_statement
+                    | "continue"                        -> continue_statement
+                    | "break"                           -> break_statement
+
+import_statement: "from" STRING "import" namespaced_identifier ("," namespaced_identifier)*
+
+// ----------------------------------------------------------------------------
+// Direct Commands
+
+?command_statement: raw_command | teleport_command
+
+raw_command: "raw" STRING
+
+teleport_command: "tp" "(" selector "," assignable_statement "," assignable_statement "," assignable_statement ")"
+
+// ----------------------------------------------------------------------------
+// Compound Statements
+
+general_block: "{" code_unit* "}"
+
+function_parameters: qualified_type IDENTIFIER ("," qualified_type IDENTIFIER)*
+
+function_definition: "export"? "function" (IDENTIFIER | "mainloop") "(" function_parameters ")" "->" primitive_type general_block
+
+while_loop: "while" "(" assignable_statement ")" general_block
+
+for_loop: "for" "(" selector ")" general_block
+
+if_block: "if" "(" assignable_statement ")" general_block
+
+else_block: "else" general_block
+
+branch: if_block ("else" if_block)* else_block?
+
+namespace: "export"? "namespace" namespaced_identifier general_block

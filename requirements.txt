@@ -1,7 +1,1 @@
-black
-build
-flake8
-isort
-mypy
-pre-commit
-twine
+lark

@@ -4,3 +4,6 @@ dist/
 
 # Caches
 .mypy_cache/
+
+# IDE
+.vscode/
