@@ -27,7 +27,10 @@ parse = "mcdil.cli:cli_parse"
 compile = "mcdil.cli:cli_compile"
 
 [tool.setuptools.packages.find]
-exclude = ["example*", "dist*", "mcdppy*"]
+exclude = ["example*", "dist*", "mcdppy*", "*.egg-info*"]
+
+[tool.setuptools.package-data]
+mcdil = ["*.lark"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
