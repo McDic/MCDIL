@@ -17,10 +17,19 @@ classifiers = [
 ]
 license = {file = "LICENSE"}
 keywords = ["minecraft", "language", "compiler"]
+dynamic = ["dependencies"]
 
 [project.urls]
 "Homepage" = "https://github.com/McDic/MCDIL"
 
 [project.scripts]
-parse = "mcdil:cli_parse"
-compile = "mcdil:cli_compile"
+parse = "mcdil.cli:cli_parse"
+compile = "mcdil.cli:cli_compile"
+
+[tool.setuptools.packages.find]
+include = ["mcdil"]
+exclude = ["examples", "dist"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies = {dev = {file = ["requirements-dev.txt"]}}

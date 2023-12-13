@@ -1,1 +1,1 @@
-from .cli import cli_compile
+from . import cli
