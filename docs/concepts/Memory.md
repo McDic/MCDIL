@@ -1,5 +1,3 @@
-# Memory Implementations
-
 This document describes how memory structure is implemented.
 
 ## Every data has form of score or NBT

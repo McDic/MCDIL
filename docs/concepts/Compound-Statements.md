@@ -1,5 +1,3 @@
-# Compound Statements
-
 This document describes compound statements of MCDIL.
 
 ## Branch

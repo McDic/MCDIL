@@ -1,5 +1,3 @@
-# Built-in Types
-
 This document describes built-in types of MCDIL.
 
 ## Primitives

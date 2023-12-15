@@ -1,5 +1,3 @@
-# Principles
-
 This document describes some principles and philosophies that involved into design of MCDIL.
 
 ### 1. Never trust any value as intermediates other than scoreboard integers and data storages.
