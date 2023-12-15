@@ -16,13 +16,15 @@
 
 ?comment: CPP_COMMENT | C_COMMENT
 
-namespaced_identifier: IDENTIFIER ( "::" IDENTIFIER )*
+namespaced_identifier:    IDENTIFIER ( "::" IDENTIFIER )*
+                        | "this"
 
-?literal: INT32         -> int32
+literal:  INT32         -> int32
         | FLOAT         -> float
         | "true"        -> true
         | "false"       -> false
         | STRING        -> string
+        | selector_literal
 
 ?type_qualifier:  "immutable"   -> immutable
                 | "static"      -> static
@@ -30,13 +32,25 @@ namespaced_identifier: IDENTIFIER ( "::" IDENTIFIER )*
 ?primitive_type:  "int"         -> int32_type
                 | "bool"        -> bool_type
                 | "null"        -> null_type
+                | "string"      -> string_type
 
-qualified_type: type_qualifier? primitive_type "*"*
+?builtin_type:    primitive_type
+                | "auto"        -> auto_type
+                | "tuple"       -> tuple_type
+                | "list"        -> list_type
+                | "mapping"     -> mapping_type
+                | "selector"    -> selector_type
 
-selector: /\@[parse]/
+any_type: (builtin_type | namespaced_identifier) templated_type_suffix? "*"*
+
+qualified_type: type_qualifier? any_type
+
+selector_literal: /\@[parse]/
+
+public_qualifier: "export"
 
 // ----------------------------------------------------------------------------
-// Abstract Statements
+// Common Statements
 
 program: code_unit+
 
@@ -49,29 +63,41 @@ code_unit: (statement ";") | comment
                     | sleep_statement
                     | escape_statement
                     | import_statement
+                    | deactivate_statement
 
 ?compound_statement:  function_definition
                     | while_loop
                     | for_loop
                     | branch
                     | namespace
+                    | struct_definition
 
 // ----------------------------------------------------------------------------
 // Simple Statements
 
-initialization: "export"? qualified_type IDENTIFIER "=" assignable_statement
+variable_definition: public_qualifier? qualified_type IDENTIFIER
 
-assignable_statement:     namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
+initialization: variable_definition "=" assignable_statement
+
+assignable_statement?:    namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
                         | namespaced_identifier "><" namespaced_identifier                                                  -> swap_statement
-                        | "(" assignable_statement ")"                                                                      -> braced_statement
+                        | "(" assignable_statement ("," assignable_statement)* ","? ")"                                     -> tuple_statement
                         | assignable_statement "[" assignable_statement ("," assignable_statement)* "]"                     -> indexing_statement
-                        | namespaced_identifier                                                                             -> identifier_statement
-                        | literal                                                                                           -> literal_statement
-                        | namespaced_identifier "(" assignable_statement ("," assignable_statement)* ")"                    -> call_statement
-                        | assignable_statement "?" "(" assignable_statement ")" ":" "(" assignable_statement ")"            -> ternary_statement
-                        | assignable_statement general_operator assignable_statement                                        -> general_statement
+                        | namespaced_identifier
+                        | literal
+                        | call_statement
+                        | "(" assignable_statement ")" "?" "(" assignable_statement ")" ":" "(" assignable_statement ")"    -> ternary_statement
+                        | unary_operator assignable_statement                                                               -> unary_statement
+                        | assignable_statement binary_operator assignable_statement                                         -> binary_statement
 
-?general_operator:    "+"   -> op_add
+parameter_pass: IDENTIFIER "=" assignable_statement
+
+call_statement: namespaced_identifier "(" parameter_pass ("," parameter_pass)* ")"
+
+?unary_operator:          "+"   -> op_pos
+                        | "-"   -> op_neg
+
+?binary_operator:     "+"   -> op_add
                     | "-"   -> op_sub
                     | "*"   -> op_mul
                     | "/"   -> op_div
@@ -96,7 +122,9 @@ escape_statement:     "return" assignable_statement     -> return_statement
                     | "continue"                        -> continue_statement
                     | "break"                           -> break_statement
 
-import_statement: "from" STRING "import" namespaced_identifier ("," namespaced_identifier)*
+import_statement: "from" STRING "import" ( (namespaced_identifier ("," namespaced_identifier)* ","?) | "*")
+
+deactivate_statement: "deactivate" IDENTIFIER
 
 // ----------------------------------------------------------------------------
 // Direct Commands
@@ -105,20 +133,20 @@ import_statement: "from" STRING "import" namespaced_identifier ("," namespaced_i
 
 raw_command: "raw" STRING
 
-teleport_command: "tp" "(" selector "," assignable_statement "," assignable_statement "," assignable_statement ")"
+teleport_command: "tp" "(" (namespaced_identifier | selector_literal) "," assignable_statement "," assignable_statement "," assignable_statement ","? ")"
 
 // ----------------------------------------------------------------------------
-// Compound Statements
+// Basic Compound Statements
 
 general_block: "{" code_unit* "}"
 
-function_parameters: qualified_type IDENTIFIER ("," qualified_type IDENTIFIER)*
+function_parameters: variable_definition ("," variable_definition)* ","?
 
-function_definition: "export"? "function" (IDENTIFIER | "mainloop") "(" function_parameters ")" "->" primitive_type general_block
+function_definition: public_qualifier? ("ticking" | template_definition)? "function" IDENTIFIER "(" function_parameters ")" "->" any_type general_block
 
 while_loop: "while" "(" assignable_statement ")" general_block
 
-for_loop: "for" "(" selector ")" general_block
+for_loop: "for" "(" (namespaced_identifier | selector_literal) ")" general_block
 
 if_block: "if" "(" assignable_statement ")" general_block
 
@@ -126,4 +154,24 @@ else_block: "else" general_block
 
 branch: if_block ("else" if_block)* else_block?
 
-namespace: "export"? "namespace" namespaced_identifier general_block
+namespace: public_qualifier? "namespace" namespaced_identifier general_block
+
+// ----------------------------------------------------------------------------
+// Struct
+
+struct_initializer: "init" "(" function_parameters ")" (general_block | ":" IDENTIFIER "(" parameter_pass ("," parameter_pass)* ","? ")")
+
+struct_inheritance: ":" namespaced_identifier ("," namespaced_identifier)*
+
+struct_definition: public_qualifier? template_definition? "struct" IDENTIFIER struct_inheritance? "{" (variable_definition ";")* (struct_initializer ";")* (function_definition ";")* "}"
+
+// ----------------------------------------------------------------------------
+// Generic
+
+template_definition_arg: ("typename" | primitive_type) IDENTIFIER
+
+template_definition: "template" "<" template_definition_arg ("," template_definition_arg)* ","? ">"
+
+template_arg: any_type | assignable_statement
+
+templated_type_suffix: "<" template_arg ("," template_arg)* ","? ">"

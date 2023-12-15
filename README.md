@@ -13,9 +13,9 @@ pip install mcdil
 
 ## Features
 
-WIP
+*WIP*
 
-# Principles of the Language
+# Principles
 
 ### 1. Never trust any value as intermediates other than scoreboard integers and data storages.
 
@@ -47,12 +47,13 @@ However, the calling entity must be alive, otherwise the function will not be ex
 Suppose you conditionally call some delay.
 Then the compiler always asssume the delay is always happening, even if there are some cases which does not call delay at all.
 
-# Specifications
+# Grammar Specifications
 
 This section is incomplete, and always follow the exact grammar specification.
 Please read `mcdil.lark` for the exact grammar.
+For example programs, please have a look at `examples` folder.
 
-## Built-in Types
+## Built-in Types (Primitive)
 
 Not many primitive types are supported for this moment. I am focusing to make working example first, and then will support floating numbers etc.
 
@@ -83,6 +84,8 @@ There is no way to assign anything to this value. Any operator used with null va
 null n;
 ```
 
+## Built-in Types (Non-Primitive)
+
 ### Range
 
 Used with keyword `range`. For now, only literal ranges are supported for target selectors.
@@ -101,19 +104,46 @@ Used with keyword `while`. This loop is used for typical programming loops.
 
 Used with keyword `as`. This loop is specifically used for iterating all entities that fits on given selectors.
 
-# Example Program
+# Implementation Specifications
 
-```
-def increment(int x) -> int {
-    x += 1;
-    return x;
+## Data memory mechanism
+
+Every data is represented by `int`, `float`, `bool`, `string`, `list`, or `compound` in Minecraft NBT form.
+For `int`, we mix scoreboard variables and data storage.
+For other types, we use data storage.
+
+Every internal data operation will happen in either `/scoreboard players` in some reserved objectives or `/data` in `(namespace):system`.
+
+For scoreboard, following are list of objectives getting maintained.
+
+- `(namespace):constants`: All constants goes here. None of integers in this objective change.
+- `(namespace):variables`: All internal variable goes here.
+
+Following is the data structure of internal system.
+Note that the whole structure is very similar to json syntax,
+but you cannot use different types of values in list.
+For this reason, `tuple` is not supported in this language.
+
+```jsonc
+{
+    // All `stack` variables goes here, where `stack` means the concept from computer memory architecture.
+    // Whenever async call is happened, the current stack variables move to `schedules`.
+    "stack": [
+        1,
+        {"some_property": [1, 2, 3]}
+    ],
+
+    // Schedules is
+    "schedules": {
+        "0": [
+            {},
+        ]
+    },
+    //
 }
-
-def load() -> bool {
-    RAW("say Hello everyone!")
-};
-
-def tick() -> int {
-
-};
 ```
+
+## There is no reference
+
+Since Minecraft does not support reference in game, we should always use function macro,
+and macro is not a cheap way to access data.

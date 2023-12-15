@@ -1,4 +1,4 @@
-from .base import AbstractComponent
+from .base import AbstractAtomicTransaction, AbstractComponent
 
 
 class Block(AbstractComponent):
@@ -7,8 +7,9 @@ class Block(AbstractComponent):
     This block can contain many blocks as child.
     """
 
-    def __init__(self, name: str | None = None):
-        super().__init__(name=name)
+    def __init__(self, component_name: str):
+        super().__init__(component_name)
+        self.transactions: list[AbstractAtomicTransaction] = []
 
 
 class AtomicBlock(Block):
@@ -17,5 +18,5 @@ class AtomicBlock(Block):
     "Atomic" block can be 1-to-1 matched with `.mcfunction` files.
     """
 
-    def __init__(self, name: str | None = None):
-        super().__init__(name)
+    def __init__(self, component_name: str):
+        super().__init__(component_name)
