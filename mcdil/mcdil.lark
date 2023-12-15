@@ -32,22 +32,34 @@ literal:  INT32         -> int32
 ?primitive_type:  "int"         -> int32_type
                 | "bool"        -> bool_type
                 | "null"        -> null_type
+                | "float"       -> float_type
                 | "string"      -> string_type
 
 ?builtin_type:    primitive_type
                 | "auto"        -> auto_type
-                | "tuple"       -> tuple_type
-                | "list"        -> list_type
-                | "mapping"     -> mapping_type
+                | "deque"       -> deque_type
                 | "selector"    -> selector_type
+                | "D3"          -> location_type
+                | "R2"          -> rotation_type
 
-any_type: (builtin_type | namespaced_identifier) templated_type_suffix? "*"*
+any_type_without_dimension: (builtin_type | namespaced_identifier) templated_type_suffix?
+
+any_type: any_type_without_dimension ("[" INT32 "]")*
 
 qualified_type: type_qualifier? any_type
 
-selector_literal: /\@[parse]/
-
 public_qualifier: "export"
+
+// ----------------------------------------------------------------------------
+// Minecraft Specific Terms
+
+single_coordinate: ("~" | "^")? (namespaced_identifier | INT32 | FLOAT)
+
+location: "3D" "(" single_coordinate "," single_coordinate "," single_coordinate ","? ")"
+
+rotation: "2R" "(" single_coordinate "," single_coordinate ","? ")"
+
+selector_literal: /\@[parse]/
 
 // ----------------------------------------------------------------------------
 // Common Statements
@@ -67,7 +79,7 @@ code_unit: (statement ";") | comment
 
 ?compound_statement:  function_definition
                     | while_loop
-                    | for_loop
+                    | execute_loop
                     | branch
                     | namespace
                     | struct_definition
@@ -77,7 +89,8 @@ code_unit: (statement ";") | comment
 
 variable_definition: public_qualifier? qualified_type IDENTIFIER
 
-initialization: variable_definition "=" assignable_statement
+initialization:   variable_definition "=" assignable_statement                          -> init_with_alter
+                | variable_definition "(" parameter_pass ("," parameter_pass)* ","? ")" -> init_with_ctor
 
 assignable_statement?:    namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
                         | namespaced_identifier "><" namespaced_identifier                                                  -> swap_statement
@@ -92,7 +105,7 @@ assignable_statement?:    namespaced_identifier alter_operator assignable_statem
 
 parameter_pass: IDENTIFIER "=" assignable_statement
 
-call_statement: namespaced_identifier "(" parameter_pass ("," parameter_pass)* ")"
+call_statement: (namespaced_identifier | any_type_without_dimension) "(" parameter_pass ("," parameter_pass)* ")"
 
 ?unary_operator:          "+"   -> op_pos
                         | "-"   -> op_neg
@@ -146,8 +159,6 @@ function_definition: public_qualifier? ("ticking" | template_definition)? "funct
 
 while_loop: "while" "(" assignable_statement ")" general_block
 
-for_loop: "for" "(" (namespaced_identifier | selector_literal) ")" general_block
-
 if_block: "if" "(" assignable_statement ")" general_block
 
 else_block: "else" general_block
@@ -155,6 +166,19 @@ else_block: "else" general_block
 branch: if_block ("else" if_block)* else_block?
 
 namespace: public_qualifier? "namespace" namespaced_identifier general_block
+
+// ----------------------------------------------------------------------------
+// Execute
+
+execute_condition:        "as" (namespaced_identifier | selector_literal)                                               -> execute_condition_as
+                        | "at" (namespaced_identifier | selector_literal)                                               -> execute_condition_at
+                        | "facing" (namespaced_identifier | selector_literal | location)                                -> execute_condition_facing
+                        | "in" STRING                                                                                   -> execute_condition_dimension
+                        | "on" ("attacker" | "controller" | "leasher" | "origin" | "passengers" | "target" | "vehicle") -> execute_condition_on
+                        | "positioned" (namespaced_identifier | selector_literal | location)                            -> execute_condition_positioned
+                        | "rotated" (namespaced_identifier | selector_literal | rotation)                               -> execute_condition_rotated
+
+execute_loop: "execute" "(" execute_condition (";" execute_condition)* ";"? ")" general_block
 
 // ----------------------------------------------------------------------------
 // Struct
