@@ -1,0 +1,1 @@
+*Note that currently the MCDIL is in early development phase, things are changing quickly and the wiki may be outdated. For exact(but poorly documented) specifications, please [read here (mcdil.lark)](https://github.com/McDic/MCDIL/blob/master/mcdil/mcdil.lark).*
