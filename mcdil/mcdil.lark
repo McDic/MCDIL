@@ -1,3 +1,4 @@
+// For detailed semantics, please have a look at comments and the official wiki.
 // ----------------------------------------------------------------------------
 // Imports
 
@@ -27,24 +28,23 @@ literal:  INT32         -> int32
         | selector_literal
 
 ?type_qualifier:  "immutable"   -> immutable
-                | "static"      -> static
 
-?primitive_type:  "int"         -> int32_type
-                | "bool"        -> bool_type
-                | "null"        -> null_type
-                | "float"       -> float_type
-                | "string"      -> string_type
+?builtin_type_lv0:        "int"         -> int32_type
+                        | "bool"        -> bool_type
 
-?builtin_type:    primitive_type
-                | "auto"        -> auto_type
-                | "deque"       -> deque_type
-                | "selector"    -> selector_type
-                | "D3"          -> location_type
-                | "R2"          -> rotation_type
+?builtin_type_lv1:      "float"         -> float_type
+                        | "null"        -> null_type
 
-any_type_without_dimension: (builtin_type | namespaced_identifier) templated_type_suffix?
+?builtin_type_lv2:      "string"        -> string_type
+                        | "deque"       -> deque_type
+                        | "selector"    -> selector_type
+                        | "D3"          -> location_type
+                        | "R2"          -> rotation_type
+                        | "map"         -> map_type
 
-any_type: any_type_without_dimension ("[" INT32 "]")*
+?builtin_type = builtin_type_lv0 | builtin_type_lv1 | builtin_type_lv2
+
+any_type: (((builtin_type | namespaced_identifier) templated_type_suffix?) | "auto") ("[" INT32 "]")* "&"?
 
 qualified_type: type_qualifier? any_type
 
@@ -53,11 +53,11 @@ public_qualifier: "export"
 // ----------------------------------------------------------------------------
 // Minecraft Specific Terms
 
-single_coordinate: ("~" | "^")? (namespaced_identifier | INT32 | FLOAT)
+single_coordinate: namespaced_identifier | INT32 | FLOAT        // Constants only
 
-location: "3D" "(" single_coordinate "," single_coordinate "," single_coordinate ","? ")"
+location_literal: "(" "D3" ";" single_coordinate "," single_coordinate "," single_coordinate ","? ")"
 
-rotation: "2R" "(" single_coordinate "," single_coordinate ","? ")"
+rotation_literal: "(" "R2" ";" single_coordinate "," single_coordinate ","? ")"
 
 selector_literal: /\@[parse]/
 
@@ -76,6 +76,7 @@ code_unit: (statement ";") | comment
                     | escape_statement
                     | import_statement
                     | deactivate_statement
+                    | alias_statement
 
 ?compound_statement:  function_definition
                     | while_loop
@@ -83,46 +84,67 @@ code_unit: (statement ";") | comment
                     | branch
                     | namespace
                     | struct_definition
+                    | enum_definition
+                    | enum_select
 
 // ----------------------------------------------------------------------------
 // Simple Statements
 
-variable_definition: public_qualifier? qualified_type IDENTIFIER
+variable_definition: public_qualifier? qualified_type IDENTIFIER        // Some parent statements cannot use some of qualifiers from here
 
 initialization:   variable_definition "=" assignable_statement                          -> init_with_alter
-                | variable_definition "(" parameter_pass ("," parameter_pass)* ","? ")" -> init_with_ctor
+                | variable_definition "(" parameter_pass ")"                            -> init_with_ctor       // Custom struct constructor is only allowed
 
-assignable_statement?:    namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
+assignable_statement:     namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
                         | namespaced_identifier "><" namespaced_identifier                                                  -> swap_statement
-                        | "(" assignable_statement ("," assignable_statement)* ","? ")"                                     -> tuple_statement
                         | assignable_statement "[" assignable_statement ("," assignable_statement)* "]"                     -> indexing_statement
                         | namespaced_identifier
                         | literal
                         | call_statement
-                        | "(" assignable_statement ")" "?" "(" assignable_statement ")" ":" "(" assignable_statement ")"    -> ternary_statement
+                        | assignable_statement "." IDENTIFIER                                                               -> property_access_statement
+                        | "(" assignable_statement "?" assignable_statement ":" assignable_statement ")"                    -> ternary_statement
                         | unary_operator assignable_statement                                                               -> unary_statement
                         | assignable_statement binary_operator assignable_statement                                         -> binary_statement
+                        | deque_init
+                        | map_init
 
-parameter_pass: IDENTIFIER "=" assignable_statement
+deque_init_internal: assignable_statement ("," assignable_statement)* ","?
 
-call_statement: (namespaced_identifier | any_type_without_dimension) "(" parameter_pass ("," parameter_pass)* ")"
+deque_init: "[" deque_init_internal? "]"
+
+map_init_single: assignable_statement "->" assignable_statement
+
+map_init_internal: map_init_single ("," map_init_single)* ","?
+
+map_init: "[" map_init_internal? "]"
+
+parameter_pass_single: IDENTIFIER "=" assignable_statement
+
+parameter_pass: parameter_pass_single ("," parameter_pass_single)* ","?
+
+call_statement: (assignable_statement | any_type) "(" parameter_pass ")"
 
 ?unary_operator:          "+"   -> op_pos
                         | "-"   -> op_neg
+                        | "!"   -> op_not
 
 ?binary_operator:     "+"   -> op_add
                     | "-"   -> op_sub
                     | "*"   -> op_mul
                     | "/"   -> op_div
                     | "%"   -> op_mod
+                    | "**"  -> op_pow
                     | "=="  -> op_eq
                     | "!="  -> op_ne
                     | "<"   -> op_lt
                     | "<="  -> op_le
                     | ">"   -> op_gt
                     | ">="  -> op_ge
+                    | "&"   -> op_and
+                    | "|"   -> op_or
+                    | "^"   -> op_xor
 
-sleep_statement: "sleep" "(" FLOAT ")"
+sleep_statement: "sleep" "(" ("tick" | "sec" | "day") "=" assignable_statement ")"
 
 ?alter_operator:  "="   -> assign_op
                 | "+="  -> assign_op_add
@@ -137,7 +159,7 @@ escape_statement:     "return" assignable_statement     -> return_statement
 
 import_statement: "from" STRING "import" ( (namespaced_identifier ("," namespaced_identifier)* ","?) | "*")
 
-deactivate_statement: "deactivate" IDENTIFIER
+alias_statement: public_qualifier? "alias" IDENTIFIER "=" (namespaced_identifier | any_type)
 
 // ----------------------------------------------------------------------------
 // Direct Commands
@@ -151,15 +173,21 @@ teleport_command: "tp" "(" (namespaced_identifier | selector_literal) "," assign
 // ----------------------------------------------------------------------------
 // Basic Compound Statements
 
-general_block: "{" code_unit* "}"
+general_block:    "{" code_unit* "}"                                    -> general_block_defined
+                | ":" namespaced_identifier "(" parameter_pass ")"      -> general_block_delegated      // Some compounds like namespace cannot use this delegated block
 
 function_parameters: variable_definition ("," variable_definition)* ","?
 
-function_definition: public_qualifier? ("ticking" | template_definition)? "function" IDENTIFIER "(" function_parameters ")" "->" any_type general_block
+function_head: public_qualifier? "ticking"? "function" IDENTIFIER template_definition? "(" function_parameters ")" "->" any_type
+
+function_definition: function_head general_block
 
 while_loop: "while" "(" assignable_statement ")" general_block
 
-if_block: "if" "(" assignable_statement ")" general_block
+if_condition:     "(" assignable_statement ")"                                          -> if_condition_typical
+                | "enum" "(" assignable_statement "->" IDENTIFIER ";" IDENTIFIER ")"    -> if_condition_enum    // enum(cond, id1, id2) -> If cond == enum id1, then run for id2 variable
+
+if_block: "if" if_condition general_block
 
 else_block: "else" general_block
 
@@ -183,19 +211,34 @@ execute_loop: "execute" "(" execute_condition (";" execute_condition)* ";"? ")" 
 // ----------------------------------------------------------------------------
 // Struct
 
-struct_initializer: "init" "(" function_parameters ")" (general_block | ":" IDENTIFIER "(" parameter_pass ("," parameter_pass)* ","? ")")
+struct_direct_initializer_single: IDENTIFIER "(" assignable_statement ")"
+
+struct_method_body:       general_block                                                                         -> struct_method_body_default
+                        | ":" struct_direct_initializer_single ("," struct_direct_initializer_single)*          -> struct_initializer_body_direct
+
+struct_method_definition: function_head struct_method_body
+
+struct_property_definition: variable_definition ("=" assignable_statement)?
 
 struct_inheritance: ":" namespaced_identifier ("," namespaced_identifier)*
 
-struct_definition: public_qualifier? template_definition? "struct" IDENTIFIER struct_inheritance? "{" (variable_definition ";")* (struct_initializer ";")* (function_definition ";")* "}"
+struct_definition: public_qualifier? "struct" IDENTIFIER template_definition? struct_inheritance?
+                   "{" ((struct_property_definition | function_definition) ";")* "}"
+
+// ----------------------------------------------------------------------------
+// Enum
+
+enum_member: IDENTIFIER ("(" any_type ")")?
+
+enum_definition: public_qualifier? "enum" IDENTIFIER "{" (enum_member ";")+ "}"
 
 // ----------------------------------------------------------------------------
 // Generic
 
-template_definition_arg: ("typename" | primitive_type) IDENTIFIER
+template_definition_arg: ("typename" | builtin_type_lv0 | "typemap") IDENTIFIER
 
-template_definition: "template" "<" template_definition_arg ("," template_definition_arg)* ","? ">"
+template_definition: "<" template_definition_arg ("," template_definition_arg)* ","? ">"
 
-template_arg: any_type | assignable_statement
+template_arg_pass_single: IDENTIFIER "=" (any_type | assignable_statement)
 
-templated_type_suffix: "<" template_arg ("," template_arg)* ","? ">"
+templated_type_suffix: "<" template_arg_pass_single ("," template_arg_pass_single)* ","? ">"
