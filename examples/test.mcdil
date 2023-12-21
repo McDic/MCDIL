@@ -1,5 +1,5 @@
-static int global_variable = 0;
+int global_variable = 0;
 
 function test_function(int x, immutable bool y) -> int {
-    return 1 + 2 * 3;
+    return (y ? x : global_variable) + 2 * 3;
 };

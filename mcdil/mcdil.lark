@@ -42,7 +42,7 @@ literal:  INT32         -> int32
                         | "R2"          -> rotation_type
                         | "map"         -> map_type
 
-?builtin_type = builtin_type_lv0 | builtin_type_lv1 | builtin_type_lv2
+?builtin_type: builtin_type_lv0 | builtin_type_lv1 | builtin_type_lv2
 
 any_type: (((builtin_type | namespaced_identifier) templated_type_suffix?) | "auto") ("[" INT32 "]")* "&"?
 
@@ -66,7 +66,7 @@ selector_literal: /\@[parse]/
 
 program: code_unit+
 
-code_unit: (statement ";") | comment
+?code_unit: (statement ";") | comment
 
 ?statement: simple_statement | command_statement | compound_statement
 
@@ -75,8 +75,8 @@ code_unit: (statement ";") | comment
                     | sleep_statement
                     | escape_statement
                     | import_statement
-                    | deactivate_statement
                     | alias_statement
+                    | author_statement
 
 ?compound_statement:  function_definition
                     | while_loop
@@ -85,7 +85,6 @@ code_unit: (statement ";") | comment
                     | namespace
                     | struct_definition
                     | enum_definition
-                    | enum_select
 
 // ----------------------------------------------------------------------------
 // Simple Statements
@@ -161,6 +160,8 @@ import_statement: "from" STRING "import" ( (namespaced_identifier ("," namespace
 
 alias_statement: public_qualifier? "alias" IDENTIFIER "=" (namespaced_identifier | any_type)
 
+author_statement: "author" STRING STRING        // username, email
+
 // ----------------------------------------------------------------------------
 // Direct Commands
 
@@ -200,11 +201,11 @@ namespace: public_qualifier? "namespace" namespaced_identifier general_block
 
 execute_condition:        "as" (namespaced_identifier | selector_literal)                                               -> execute_condition_as
                         | "at" (namespaced_identifier | selector_literal)                                               -> execute_condition_at
-                        | "facing" (namespaced_identifier | selector_literal | location)                                -> execute_condition_facing
+                        | "facing" (namespaced_identifier | selector_literal)                                -> execute_condition_facing
                         | "in" STRING                                                                                   -> execute_condition_dimension
                         | "on" ("attacker" | "controller" | "leasher" | "origin" | "passengers" | "target" | "vehicle") -> execute_condition_on
-                        | "positioned" (namespaced_identifier | selector_literal | location)                            -> execute_condition_positioned
-                        | "rotated" (namespaced_identifier | selector_literal | rotation)                               -> execute_condition_rotated
+                        | "positioned" (namespaced_identifier | selector_literal)                            -> execute_condition_positioned
+                        | "rotated" (namespaced_identifier | selector_literal)                               -> execute_condition_rotated
 
 execute_loop: "execute" "(" execute_condition (";" execute_condition)* ";"? ")" general_block
 
@@ -222,8 +223,7 @@ struct_property_definition: variable_definition ("=" assignable_statement)?
 
 struct_inheritance: ":" namespaced_identifier ("," namespaced_identifier)*
 
-struct_definition: public_qualifier? "struct" IDENTIFIER template_definition? struct_inheritance?
-                   "{" ((struct_property_definition | function_definition) ";")* "}"
+struct_definition: public_qualifier? "struct" IDENTIFIER template_definition? struct_inheritance? "{" ((struct_property_definition | struct_method_definition) ";")* "}"
 
 // ----------------------------------------------------------------------------
 // Enum
