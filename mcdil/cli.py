@@ -28,6 +28,29 @@ def get_compilation_level(x: str) -> CompilationLevel:
         return CompilationLevel(level)
 
 
+def perform(path: Path, level: CompilationLevel) -> bool:
+    """
+    Perform compilation process for given path and level.
+    """
+
+    with open(path, "r") as codefile:
+        code: str = codefile.read()
+
+    level_num = level.value
+
+    if 1 <= level_num:
+        tree = parse(code)
+    if 1 == level_num:
+        print("=" * 120)
+        print(tree.pretty())
+        print("=" * 120)
+        return True
+
+    # Unsupported branch
+    print("This level %s is currently unsupported." % (level.name,))
+    return False
+
+
 def main():
     """
     Main entry of the CLI program.
@@ -38,6 +61,7 @@ def main():
     parser.add_argument(
         "--file",
         "-f",
+        nargs="+",
         type=Path,
         required=True,
         help="specify a `.mcdil` file to analyze",
@@ -52,20 +76,7 @@ def main():
     )
     namespace = parser.parse_args()
 
-    # Read code
-    with open(namespace.file) as codefile:
-        code = codefile.read()
-
-    # Get level number
-    level_num = int(namespace.level.value)
-
-    # Parsing tree
-    if 1 <= level_num:
-        tree = parse(code)
-    if 1 == level_num:
-        print(tree.pretty())
-        exit(0)
-
-    # Unsupported branch
-    print("This level %s is currently unsupported." % (namespace.level.name,))
-    exit(1)
+    for path in namespace.file:
+        print("Performing %s process for file %s.." % (namespace.level.name, path))
+        if not perform(path, namespace.level):
+            exit(1)

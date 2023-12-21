@@ -17,15 +17,15 @@
 
 ?comment: CPP_COMMENT | C_COMMENT
 
-namespaced_identifier:    IDENTIFIER ( "::" IDENTIFIER )*
-                        | "this"
+namespaced_identifier.-2:       IDENTIFIER ( "::" IDENTIFIER )*
+                                | "this"
 
-literal:  INT32         -> int32
-        | FLOAT         -> float
-        | "true"        -> true
-        | "false"       -> false
-        | STRING        -> string
-        | selector_literal
+literal:        INT32         -> int32
+                | FLOAT         -> float
+                | "true"        -> true
+                | "false"       -> false
+                | STRING        -> string
+                | selector_literal
 
 ?type_qualifier:  "immutable"   -> immutable
 
@@ -94,7 +94,7 @@ variable_definition: public_qualifier? qualified_type IDENTIFIER        // Some 
 initialization:   variable_definition "=" assignable_statement                          -> init_with_alter
                 | variable_definition "(" parameter_pass ")"                            -> init_with_ctor       // Custom struct constructor is only allowed
 
-assignable_statement:     namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
+assignable_statement.-1:  namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
                         | namespaced_identifier "><" namespaced_identifier                                                  -> swap_statement
                         | assignable_statement "[" assignable_statement ("," assignable_statement)* "]"                     -> indexing_statement
                         | namespaced_identifier
@@ -152,7 +152,7 @@ sleep_statement: "sleep" "(" ("tick" | "sec" | "day") "=" assignable_statement "
                 | "/="  -> assign_op_div
                 | "%="  -> assign_op_mod
 
-escape_statement:     "return" assignable_statement     -> return_statement
+escape_statement:     "return" assignable_statement?    -> return_statement
                     | "continue"                        -> continue_statement
                     | "break"                           -> break_statement
 
