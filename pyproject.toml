@@ -34,3 +34,9 @@ mcdil = ["*.lark"]
 version = {attr = "mcdil.VERSION"}
 dependencies = {file = ["requirements.txt"]}
 optional-dependencies = {dev = {file = ["requirements-dev.txt"]}}
+
+[tool.mypy]
+exclude = [
+  "examples"
+]
+ignore_missing_imports = true

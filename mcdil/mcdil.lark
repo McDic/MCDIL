@@ -17,10 +17,10 @@
 
 ?comment: CPP_COMMENT | C_COMMENT
 
-namespaced_identifier.-2:       IDENTIFIER ( "::" IDENTIFIER )*
+namespaced_identifier.-2:         IDENTIFIER ( "::" IDENTIFIER )*
                                 | "this"
 
-literal:        INT32         -> int32
+literal:          INT32         -> int32
                 | FLOAT         -> float
                 | "true"        -> true
                 | "false"       -> false
@@ -32,10 +32,10 @@ literal:        INT32         -> int32
 ?builtin_type_lv0:        "int"         -> int32_type
                         | "bool"        -> bool_type
 
-?builtin_type_lv1:      "float"         -> float_type
+?builtin_type_lv1:        "float"       -> float_type
                         | "null"        -> null_type
 
-?builtin_type_lv2:      "string"        -> string_type
+?builtin_type_lv2:        "string"        -> string_type
                         | "deque"       -> deque_type
                         | "selector"    -> selector_type
                         | "D3"          -> location_type
@@ -44,7 +44,7 @@ literal:        INT32         -> int32
 
 ?builtin_type: builtin_type_lv0 | builtin_type_lv1 | builtin_type_lv2
 
-any_type: (((builtin_type | namespaced_identifier) templated_type_suffix?) | "auto") ("[" INT32 "]")* "&"?
+any_type: (((builtin_type | namespaced_identifier) generic_definition?) | "auto") ("[" INT32 "]")* "&"?
 
 qualified_type: type_qualifier? any_type
 
@@ -74,7 +74,6 @@ program: code_unit+
                     | assignable_statement
                     | sleep_statement
                     | escape_statement
-                    | import_statement
                     | alias_statement
                     | author_statement
 
@@ -156,8 +155,6 @@ escape_statement:     "return" assignable_statement?    -> return_statement
                     | "continue"                        -> continue_statement
                     | "break"                           -> break_statement
 
-import_statement: "from" STRING "import" ( (namespaced_identifier ("," namespaced_identifier)* ","?) | "*")
-
 alias_statement: public_qualifier? "alias" IDENTIFIER "=" (namespaced_identifier | any_type)
 
 author_statement: "author" STRING STRING        // username, email
@@ -165,28 +162,27 @@ author_statement: "author" STRING STRING        // username, email
 // ----------------------------------------------------------------------------
 // Direct Commands
 
-?command_statement: raw_command | teleport_command
+?command_statement: raw_command
 
 raw_command: "raw" STRING
-
-teleport_command: "tp" "(" (namespaced_identifier | selector_literal) "," assignable_statement "," assignable_statement "," assignable_statement ","? ")"
 
 // ----------------------------------------------------------------------------
 // Basic Compound Statements
 
 general_block:    "{" code_unit* "}"                                    -> general_block_defined
                 | ":" namespaced_identifier "(" parameter_pass ")"      -> general_block_delegated      // Some compounds like namespace cannot use this delegated block
+                | "=" "?"                                               -> general_block_abstracted
 
 function_parameters: variable_definition ("," variable_definition)* ","?
 
-function_head: public_qualifier? "ticking"? "function" IDENTIFIER template_definition? "(" function_parameters ")" "->" any_type
+function_head: public_qualifier? "function" IDENTIFIER generic_definition? "(" function_parameters ")" "->" any_type
 
 function_definition: function_head general_block
 
 while_loop: "while" "(" assignable_statement ")" general_block
 
 if_condition:     "(" assignable_statement ")"                                          -> if_condition_typical
-                | "enum" "(" assignable_statement "->" IDENTIFIER ";" IDENTIFIER ")"    -> if_condition_enum    // enum(cond, id1, id2) -> If cond == enum id1, then run for id2 variable
+                | "enum" "(" assignable_statement "->" IDENTIFIER ";" IDENTIFIER ")"    -> if_condition_enum    // enum(cond -> id1; id2) -> If cond == enum id1, then run for id2 variable
 
 if_block: "if" if_condition general_block
 
@@ -194,18 +190,20 @@ else_block: "else" general_block
 
 branch: if_block ("else" if_block)* else_block?
 
-namespace: public_qualifier? "namespace" namespaced_identifier general_block
+importing: "=" "import" STRING
+
+namespace: public_qualifier? "namespace" namespaced_identifier (general_block | importing)
 
 // ----------------------------------------------------------------------------
 // Execute
 
 execute_condition:        "as" (namespaced_identifier | selector_literal)                                               -> execute_condition_as
                         | "at" (namespaced_identifier | selector_literal)                                               -> execute_condition_at
-                        | "facing" (namespaced_identifier | selector_literal)                                -> execute_condition_facing
+                        | "facing" (namespaced_identifier | selector_literal)                                           -> execute_condition_facing
                         | "in" STRING                                                                                   -> execute_condition_dimension
                         | "on" ("attacker" | "controller" | "leasher" | "origin" | "passengers" | "target" | "vehicle") -> execute_condition_on
-                        | "positioned" (namespaced_identifier | selector_literal)                            -> execute_condition_positioned
-                        | "rotated" (namespaced_identifier | selector_literal)                               -> execute_condition_rotated
+                        | "positioned" (namespaced_identifier | selector_literal)                                       -> execute_condition_positioned
+                        | "rotated" (namespaced_identifier | selector_literal)                                          -> execute_condition_rotated
 
 execute_loop: "execute" "(" execute_condition (";" execute_condition)* ";"? ")" general_block
 
@@ -223,7 +221,7 @@ struct_property_definition: variable_definition ("=" assignable_statement)?
 
 struct_inheritance: ":" namespaced_identifier ("," namespaced_identifier)*
 
-struct_definition: public_qualifier? "struct" IDENTIFIER template_definition? struct_inheritance? "{" ((struct_property_definition | struct_method_definition) ";")* "}"
+struct_definition: public_qualifier? "struct" IDENTIFIER generic_definition? struct_inheritance? "{" ((struct_property_definition | struct_method_definition) ";")* "}"
 
 // ----------------------------------------------------------------------------
 // Enum
@@ -235,10 +233,6 @@ enum_definition: public_qualifier? "enum" IDENTIFIER "{" (enum_member ";")+ "}"
 // ----------------------------------------------------------------------------
 // Generic
 
-template_definition_arg: ("typename" | builtin_type_lv0 | "typemap") IDENTIFIER
+generic_definition_arg: ("typename" | builtin_type_lv0 | "typemap") IDENTIFIER ("=" (any_type | assignable_statement))?
 
-template_definition: "<" template_definition_arg ("," template_definition_arg)* ","? ">"
-
-template_arg_pass_single: IDENTIFIER "=" (any_type | assignable_statement)
-
-templated_type_suffix: "<" template_arg_pass_single ("," template_arg_pass_single)* ","? ">"
+generic_definition: "<" generic_definition_arg ("," generic_definition_arg)* ","? ">"
