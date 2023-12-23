@@ -1,8 +1,4 @@
-import typing
-
 from .base import AbstractDefinition
-
-ROOT_NAMESPACE_NAME: typing.Final[str] = "__MODULE__"
 
 
 class NamespaceDefinition(AbstractDefinition):

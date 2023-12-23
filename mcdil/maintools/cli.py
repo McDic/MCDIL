@@ -38,9 +38,8 @@ def perform(path: Path, level: CompilationLevel) -> bool:
 
     level_num = level.value
 
-    if 1 <= level_num:
-        tree = parse(code)
     if 1 == level_num:
+        tree = parse(code)
         print("=" * 120)
         print(tree.pretty())
         print("=" * 120)

@@ -3,3 +3,11 @@ export function some_function(bool x) -> null {
         return;
     };
 };
+
+namespace level1 {
+    namespace level2 {
+        namespace this {
+            int x = 1234;
+        };
+    };
+};

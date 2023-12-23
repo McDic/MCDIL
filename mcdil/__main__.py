@@ -1,4 +1,4 @@
-from . import cli
+from .maintools import main
 
 if __name__ == "__main__":
-    exit(cli.main())
+    exit(main())

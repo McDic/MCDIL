@@ -22,7 +22,7 @@ dynamic = ["dependencies", "version"]
 "Homepage" = "https://github.com/McDic/MCDIL"
 
 [project.scripts]
-mcdil = "mcdil:cli.main"
+mcdil = "mcdil:maintools.main"
 
 [tool.setuptools.packages.find]
 exclude = ["example*", "dist*", "mcdppy*", "*.egg-info*"]

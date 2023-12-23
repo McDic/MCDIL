@@ -2,6 +2,8 @@ from pathlib import Path
 
 from lark import Lark, ParseTree
 
+from .reader import read
+
 _global_mcdil_parser: Lark | None = None
 
 
@@ -12,12 +14,13 @@ def load_grammar(path: Path | None = None, start: str = "program") -> Lark:
     global _global_mcdil_parser
     if _global_mcdil_parser is not None:
         return _global_mcdil_parser
-    path = path or Path(__file__).absolute().parent / "mcdil.lark"
+    path = path or (Path(__file__).absolute().parent.parent / "mcdil.lark")
     with open(path, "r") as grammar_file:
         _global_mcdil_parser = Lark(
             grammar_file.read(),
             start=start,
             debug=True,
+            propagate_positions=True,
         )
         return _global_mcdil_parser
 
@@ -33,5 +36,4 @@ def parse(code: str) -> ParseTree:
 
 
 if __name__ == "__main__":
-    with open("examples/test.mcdil") as test_mcdil:
-        parse(test_mcdil.read())
+    print(parse(read("examples/simple/test2.mcdil")[0]).pretty())

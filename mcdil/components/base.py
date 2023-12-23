@@ -1,54 +1,8 @@
-import enum
 import typing
 from pathlib import Path
 
 from .. import errors
-
-# List of hard keywords that never can be a variable name.
-HARD_KEYWORDS: frozenset[str] = frozenset(
-    {
-        # Types
-        "int",
-        "bool",
-        "float",
-        "null",
-        "string",
-        "deque",
-        "selector",
-        "D3",
-        "R2",
-        "map",
-        "auto",
-        # Literals
-        "true",
-        "false",
-        # Qualifiers
-        "immutable",
-        "export",
-        # Special statements
-        "sleep",
-        "return",
-        "continue",
-        "break",
-        "alias",
-        "author",
-        # MC Command related
-        "raw",
-        "execute",
-        # Compounds
-        "function",
-        "while",
-        "if",
-        "else",
-        "namespace",
-        "import",
-        # Custom Types and Generics
-        "struct",
-        "enum",
-        "typename",
-        "typemap",
-    }
-)
+from ..constants import HARD_KEYWORDS, GenericParameterType
 
 
 class AbstractComponent:
@@ -63,24 +17,20 @@ class AbstractComponent:
     and more.
     """
 
+    AUTHORABLE: typing.ClassVar[bool] = False
+
     def __init__(
         self,
         *,
         component_name: str | None = None,
         module_path: Path | str,
         parent: typing.Self | None = None,
-        author_name: str | None = None,
-        author_email: str | None = None,
     ) -> None:
         # Literal or inherited properties
         self._component_name: str | None = component_name
         self._module_path: Path | str = module_path
-        self._author_name: str | None = author_name or (
-            parent._author_name if parent is not None else None
-        )
-        self._author_email: str | None = author_email or (
-            parent._author_email if parent is not None else None
-        )
+        self._author_name: str | None = None
+        self._author_email: str | None = None
 
         # Graph properties
         self._childs: list[typing.Self] = []
@@ -123,17 +73,16 @@ class AbstractComponent:
         """
         raise NotImplementedError
 
-
-@enum.verify(enum.UNIQUE)
-class GenericParameterType(enum.Enum):
-    """
-    Enumeration of generic parameter types.
-    """
-
-    TYPENAME = enum.auto()
-    INT = enum.auto()
-    BOOL = enum.auto()
-    TYPEMAP = enum.auto()
+    def set_author(self, name: str, email: str) -> None:
+        """
+        Try to set an author. If already set, raise an error.
+        """
+        if not self.AUTHORABLE:
+            raise errors.NotAuthorable()
+        elif self._author_name is not None or self._author_email is not None:
+            raise errors.AuthorAlreadySet(name=name, email=email)
+        self._author_name = name
+        self._author_email = name
 
 
 # Mapping of generic identifiers and its information.
@@ -175,8 +124,7 @@ class AbstractDefinition(AbstractComponent):
         generic: GENERIC_PARAMETERS | None = None,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
-        self._identifier: typing.Final[str] = identifier
+        super().__init__(component_name=identifier, **kwargs)
         self._generic: GENERIC_PARAMETERS = self._verify_generic_parameters(generic)
 
     @staticmethod
@@ -197,7 +145,7 @@ class AbstractDefinition(AbstractComponent):
         return generic
 
     def represented_identifier(self) -> str | None:
-        return self._identifier
+        return self._component_name
 
 
 class AbstractAtomicTransaction(AbstractComponent):

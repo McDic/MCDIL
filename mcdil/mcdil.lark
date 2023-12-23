@@ -17,38 +17,36 @@
 
 ?comment: CPP_COMMENT | C_COMMENT
 
-namespaced_identifier.-2:         IDENTIFIER ( "::" IDENTIFIER )*
-                                | "this"
+namespaced_identifier.-2:         IDENTIFIER ( "::" IDENTIFIER )*   -> direct_access
+                                | "this"                            -> reserved_identifier_this
 
-literal:          INT32         -> int32
-                | FLOAT         -> float
-                | "true"        -> true
-                | "false"       -> false
-                | STRING        -> string
-                | selector_literal
+literal:  INT32
+        | FLOAT
+        | "true"
+        | "false"
+        | STRING
+        | SELECTOR_LITERAL
 
-?type_qualifier:  "immutable"   -> immutable
+TYPE_QUALIFIER: "immutable"
 
-?builtin_type_lv0:        "int"         -> int32_type
-                        | "bool"        -> bool_type
+BUILTIN_TYPE_LV0: "int" | "bool"
 
-?builtin_type_lv1:        "float"       -> float_type
-                        | "null"        -> null_type
+BUILTIN_TYPE_LV1: "float" | "null"
 
-?builtin_type_lv2:        "string"        -> string_type
-                        | "deque"       -> deque_type
-                        | "selector"    -> selector_type
-                        | "D3"          -> location_type
-                        | "R2"          -> rotation_type
-                        | "map"         -> map_type
+BUILTIN_TYPE_LV2: "string"
+                | "deque"
+                | "selector"
+                | "D3"
+                | "R2"
+                | "map"
 
-?builtin_type: builtin_type_lv0 | builtin_type_lv1 | builtin_type_lv2
+BUILTIN_TYPE: BUILTIN_TYPE_LV0 | BUILTIN_TYPE_LV1 | BUILTIN_TYPE_LV2
 
-any_type: (((builtin_type | namespaced_identifier) generic_definition?) | "auto") ("[" INT32 "]")* "&"?
+any_type: (((BUILTIN_TYPE | namespaced_identifier) generic_definition?) | "auto") ("[" INT32 "]")* "&"?
 
-qualified_type: type_qualifier? any_type
+qualified_type: TYPE_QUALIFIER* any_type
 
-public_qualifier: "export"
+PUBLIC_QUALIFIER: "export"
 
 // ----------------------------------------------------------------------------
 // Minecraft Specific Terms
@@ -59,7 +57,7 @@ location_literal: "(" "D3" ";" single_coordinate "," single_coordinate "," singl
 
 rotation_literal: "(" "R2" ";" single_coordinate "," single_coordinate ","? ")"
 
-selector_literal: /\@[parse]/
+SELECTOR_LITERAL: /\@[parse]/
 
 // ----------------------------------------------------------------------------
 // Common Statements
@@ -88,12 +86,12 @@ program: code_unit+
 // ----------------------------------------------------------------------------
 // Simple Statements
 
-variable_definition: public_qualifier? qualified_type IDENTIFIER        // Some parent statements cannot use some of qualifiers from here
+variable_definition: PUBLIC_QUALIFIER? qualified_type IDENTIFIER        // Some parent statements cannot use some of qualifiers from here
 
 initialization:   variable_definition "=" assignable_statement                          -> init_with_alter
                 | variable_definition "(" parameter_pass ")"                            -> init_with_ctor       // Custom struct constructor is only allowed
 
-assignable_statement.-1:  namespaced_identifier alter_operator assignable_statement                                         -> alter_statement
+assignable_statement.-1:  namespaced_identifier ALTER_OPERATOR assignable_statement                                         -> alter_statement
                         | namespaced_identifier "><" namespaced_identifier                                                  -> swap_statement
                         | assignable_statement "[" assignable_statement ("," assignable_statement)* "]"                     -> indexing_statement
                         | namespaced_identifier
@@ -101,8 +99,8 @@ assignable_statement.-1:  namespaced_identifier alter_operator assignable_statem
                         | call_statement
                         | assignable_statement "." IDENTIFIER                                                               -> property_access_statement
                         | "(" assignable_statement "?" assignable_statement ":" assignable_statement ")"                    -> ternary_statement
-                        | unary_operator assignable_statement                                                               -> unary_statement
-                        | assignable_statement binary_operator assignable_statement                                         -> binary_statement
+                        | UNARY_OPERATOR assignable_statement                                                               -> unary_statement
+                        | assignable_statement BINARY_OPERATOR assignable_statement                                         -> binary_statement
                         | deque_init
                         | map_init
 
@@ -122,40 +120,40 @@ parameter_pass: parameter_pass_single ("," parameter_pass_single)* ","?
 
 call_statement: (assignable_statement | any_type) "(" parameter_pass ")"
 
-?unary_operator:          "+"   -> op_pos
-                        | "-"   -> op_neg
-                        | "!"   -> op_not
+UNARY_OPERATOR: "+" | "-" | "!"
 
-?binary_operator:     "+"   -> op_add
-                    | "-"   -> op_sub
-                    | "*"   -> op_mul
-                    | "/"   -> op_div
-                    | "%"   -> op_mod
-                    | "**"  -> op_pow
-                    | "=="  -> op_eq
-                    | "!="  -> op_ne
-                    | "<"   -> op_lt
-                    | "<="  -> op_le
-                    | ">"   -> op_gt
-                    | ">="  -> op_ge
-                    | "&"   -> op_and
-                    | "|"   -> op_or
-                    | "^"   -> op_xor
+BINARY_OPERATOR:      "+"
+                    | "-"
+                    | "*"
+                    | "/"
+                    | "%"
+                    | "**"
+                    | "=="
+                    | "!="
+                    | "<"
+                    | "<="
+                    | ">"
+                    | ">="
+                    | "&"
+                    | "|"
+                    | "^"
 
-sleep_statement: "sleep" "(" ("tick" | "sec" | "day") "=" assignable_statement ")"
+SLEEP_TERM: "tick" | "sec" | "day"
 
-?alter_operator:  "="   -> assign_op
-                | "+="  -> assign_op_add
-                | "-="  -> assign_op_sub
-                | "*="  -> assign_op_mul
-                | "/="  -> assign_op_div
-                | "%="  -> assign_op_mod
+sleep_statement: "sleep" "(" SLEEP_TERM "=" assignable_statement ")"
+
+ALTER_OPERATOR:   "="
+                | "+="
+                | "-="
+                | "*="
+                | "/="
+                | "%="
 
 escape_statement:     "return" assignable_statement?    -> return_statement
                     | "continue"                        -> continue_statement
                     | "break"                           -> break_statement
 
-alias_statement: public_qualifier? "alias" IDENTIFIER "=" (namespaced_identifier | any_type)
+alias_statement: PUBLIC_QUALIFIER? "alias" IDENTIFIER "=" (namespaced_identifier | any_type)
 
 author_statement: "author" STRING STRING        // username, email
 
@@ -175,7 +173,7 @@ general_block:    "{" code_unit* "}"                                    -> gener
 
 function_parameters: variable_definition ("," variable_definition)* ","?
 
-function_head: public_qualifier? "function" IDENTIFIER generic_definition? "(" function_parameters ")" "->" any_type
+function_head: PUBLIC_QUALIFIER? "function" IDENTIFIER generic_definition? "(" function_parameters ")" "->" any_type
 
 function_definition: function_head general_block
 
@@ -192,18 +190,20 @@ branch: if_block ("else" if_block)* else_block?
 
 importing: "=" "import" STRING
 
-namespace: public_qualifier? "namespace" namespaced_identifier (general_block | importing)
+namespace: PUBLIC_QUALIFIER? "namespace" namespaced_identifier (general_block | importing)
 
 // ----------------------------------------------------------------------------
 // Execute
 
-execute_condition:        "as" (namespaced_identifier | selector_literal)                                               -> execute_condition_as
-                        | "at" (namespaced_identifier | selector_literal)                                               -> execute_condition_at
-                        | "facing" (namespaced_identifier | selector_literal)                                           -> execute_condition_facing
-                        | "in" STRING                                                                                   -> execute_condition_dimension
-                        | "on" ("attacker" | "controller" | "leasher" | "origin" | "passengers" | "target" | "vehicle") -> execute_condition_on
-                        | "positioned" (namespaced_identifier | selector_literal)                                       -> execute_condition_positioned
-                        | "rotated" (namespaced_identifier | selector_literal)                                          -> execute_condition_rotated
+EXECUTE_ON_CANDIDATES: "attacker" | "controller" | "leasher" | "origin" | "passengers" | "target" | "vehicle"
+
+execute_condition:        "as" (namespaced_identifier | SELECTOR_LITERAL)               -> execute_condition_as
+                        | "at" (namespaced_identifier | SELECTOR_LITERAL)               -> execute_condition_at
+                        | "facing" (namespaced_identifier | SELECTOR_LITERAL)           -> execute_condition_facing
+                        | "in" STRING                                                   -> execute_condition_dimension
+                        | "on" EXECUTE_ON_CANDIDATES                                    -> execute_condition_on
+                        | "positioned" (namespaced_identifier | SELECTOR_LITERAL)       -> execute_condition_positioned
+                        | "rotated" (namespaced_identifier | SELECTOR_LITERAL)          -> execute_condition_rotated
 
 execute_loop: "execute" "(" execute_condition (";" execute_condition)* ";"? ")" general_block
 
@@ -221,18 +221,20 @@ struct_property_definition: variable_definition ("=" assignable_statement)?
 
 struct_inheritance: ":" namespaced_identifier ("," namespaced_identifier)*
 
-struct_definition: public_qualifier? "struct" IDENTIFIER generic_definition? struct_inheritance? "{" ((struct_property_definition | struct_method_definition) ";")* "}"
+struct_definition: PUBLIC_QUALIFIER? "struct" IDENTIFIER generic_definition? struct_inheritance? "{" ((struct_property_definition | struct_method_definition) ";")* "}"
 
 // ----------------------------------------------------------------------------
 // Enum
 
 enum_member: IDENTIFIER ("(" any_type ")")?
 
-enum_definition: public_qualifier? "enum" IDENTIFIER "{" (enum_member ";")+ "}"
+enum_definition: PUBLIC_QUALIFIER? "enum" IDENTIFIER "{" (enum_member ";")+ "}"
 
 // ----------------------------------------------------------------------------
 // Generic
 
-generic_definition_arg: ("typename" | builtin_type_lv0 | "typemap") IDENTIFIER ("=" (any_type | assignable_statement))?
+GENERIC_ARGUMENT_TYPE: "typename" | BUILTIN_TYPE_LV0 | "typemap"
+
+generic_definition_arg: GENERIC_ARGUMENT_TYPE IDENTIFIER ("=" (any_type | assignable_statement))?
 
 generic_definition: "<" generic_definition_arg ("," generic_definition_arg)* ","? ">"
