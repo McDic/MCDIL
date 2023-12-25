@@ -3,8 +3,12 @@ This module provides all exceptions of MCDIL module.
 """
 
 import typing
+from pathlib import Path
 
-from .context import CompilationContext, get_global_context
+from lark import ParseTree, Token
+from yarl import URL
+
+from .context import CompilationLocation, get_global_compilation_location
 
 
 class MCDILError(Exception):
@@ -19,23 +23,31 @@ class SourceCodeFetchFailed(MCDILError):
     Raised when failed to fetch the source code.
     """
 
+    def __init__(self, source: Path | URL | str, meta: typing.Any = None):
+        super().__init__(
+            "Failed to fetch source from %s%s" % (source, f"; {meta}" if meta else "")
+        )
+
 
 class CompilationError(MCDILError):
     """
     General exception of all MCDIL compilation errors.
     """
 
-    def __init__(
-        self, message: str, *, context: CompilationContext | None = None
-    ) -> None:
-        self.context = context or get_global_context()
-        if self.context is None:
-            super().__init__("Compile error; %s" % (message,))
-        else:
-            super().__init__(
-                "Compile error at %s:%d:%d; %s"
-                % (self.context.source, self.context.line, self.context.column, message)
-            )
+    def __init__(self, message: str, *, CL: CompilationLocation | None = None) -> None:
+        self._CL = CL or get_global_compilation_location()
+        super().__init__(
+            "Compile error; %s" % (message,)
+            if self._CL is None
+            else "Compile error at %s:%d:%d; %s"
+            % (self._CL.source, self._CL.line, self._CL.column, message)
+        )
+
+
+class GraphError(CompilationError):
+    """
+    Raised when there is a problem on graph resolution.
+    """
 
 
 class IdentifierError(CompilationError, NameError):
@@ -66,14 +78,8 @@ class IdentifierNotFound(IdentifierError):
         super().__init__("Identifier %s not found" % (identifier,), **kwargs)
 
 
-class AbstractCollision(CompilationError, NameError):
-    """
-    Abstract base of all kind of collisions.
-    """
-
-
 @typing.final
-class IdenfitierCollision(AbstractCollision, IdentifierError):
+class IdenfitierCollision(IdentifierError):
     """
     Raised when different object of same identifier
     already exists in this scope directly.
@@ -93,6 +99,21 @@ class WrongComponentMeta(CompilationError):
 
     def __init__(self, message: str, **kwargs) -> None:
         super().__init__(message, **kwargs)
+
+
+class UnexpectedParseTree(WrongComponentMeta):
+    """
+    Raised when the unexpected token or parse tree is encountered.
+    """
+
+    def __init__(self, node: ParseTree | Token, **kwargs) -> None:
+        super().__init__(
+            "Unexpected %s encountered"
+            % (
+                f"token {node.type}" if isinstance(node, Token) else f"node {node.data}"
+            ),
+            **kwargs,
+        )
 
 
 @typing.final
@@ -115,3 +136,13 @@ class NotAuthorable(WrongComponentMeta):
 
     def __init__(self, **kwargs) -> None:
         super().__init__("This component can't have an author", **kwargs)
+
+
+@typing.final
+class DescriptionAlreadySet(WrongComponentMeta):
+    """
+    Raised when this component already has an description.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__("This component already have a description", **kwargs)

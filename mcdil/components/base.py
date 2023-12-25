@@ -120,12 +120,21 @@ class AbstractDefinition(AbstractComponent):
         self,
         *,
         identifier: str,
-        # IDENTIFIER: TYPENAME/INT/BOOL/TYPEMAP
         generic: GENERIC_PARAMETERS | None = None,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(component_name=identifier, **kwargs)
         self._generic: GENERIC_PARAMETERS = self._verify_generic_parameters(generic)
+        self._description: str = description
+
+    def set_description(self, description: str):
+        """
+        Set this component's description, if not set.
+        """
+        if self._description:
+            raise errors.DescriptionAlreadySet
+        self._description = description
 
     @staticmethod
     def _verify_generic_parameters(

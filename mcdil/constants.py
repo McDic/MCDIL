@@ -3,7 +3,6 @@ import typing
 from dataclasses import dataclass
 from pathlib import Path
 
-import lark
 from yarl import URL
 
 # Default name of root namespace.

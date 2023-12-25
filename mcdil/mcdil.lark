@@ -15,7 +15,7 @@
 // ----------------------------------------------------------------------------
 // Primitives
 
-?comment: CPP_COMMENT | C_COMMENT
+ANY_COMMENT: CPP_COMMENT | C_COMMENT
 
 namespaced_identifier.-2:         IDENTIFIER ( "::" IDENTIFIER )*   -> direct_access
                                 | "this"                            -> reserved_identifier_this
@@ -64,7 +64,7 @@ SELECTOR_LITERAL: /\@[parse]/
 
 program: code_unit+
 
-?code_unit: (statement ";") | comment
+?code_unit: (statement ";") | ANY_COMMENT
 
 ?statement: simple_statement | command_statement | compound_statement
 

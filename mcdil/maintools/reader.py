@@ -1,7 +1,6 @@
 import warnings
 from pathlib import Path
 
-import lark
 import requests
 from yarl import URL
 
@@ -50,9 +49,9 @@ def read(
                 % (target_file_path,)
             )
 
-        assert isinstance(
-            source, str
-        ), "`source` should be str type if failed to fetch from file"
+        assert not isinstance(
+            source, Path
+        ), "`source` should be non-Path type if failed to fetch from file"
 
         # Try network
         if (
@@ -73,12 +72,8 @@ def read(
             if response.status_code // 100 == 2:
                 return response.text, target_network_path
 
-        raise SourceCodeFetchFailed(
-            'Failed to fetch source code from "%s" with unknown reason' % (source,)
-        )
+        raise SourceCodeFetchFailed(source)
 
     # Throw an exception if there is unintended error
     except Exception as err:
-        raise SourceCodeFetchFailed(
-            'Failed to fetch source code from "%s" by error <%s>' % (source, err)
-        ).with_traceback(err.__traceback__)
+        raise SourceCodeFetchFailed(source, err).with_traceback(err.__traceback__)
