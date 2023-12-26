@@ -10,9 +10,9 @@ class AbstractComponent:
     Represents an any abstract code component.
     This includes all kind of statements including
 
-    - function definitions
-    - assignable statements
-    - namespace block
+    - Function definitions
+    - Assignable statements
+    - Namespace blocks
 
     and more.
     """
@@ -23,38 +23,46 @@ class AbstractComponent:
         self,
         *,
         component_name: str | None = None,
-        module_path: Path | str,
         parent: typing.Self | None = None,
+        exported: bool = False,
     ) -> None:
+        """
+        Component name is an identifier to access this,
+        can be `None` for anonymous blocks like `while` loops and more.
+
+        Both `parent` and `linked` are accessible identifiers,
+        however `linked` is not used for outer name resolution.
+        A root of the module is always parent-less component.
+        """
+
         # Literal or inherited properties
         self._component_name: str | None = component_name
-        self._module_path: Path | str = module_path
+        if component_name in HARD_KEYWORDS:
+            raise errors.KeywordIdentifier(component_name)
         self._author_name: str | None = None
         self._author_email: str | None = None
+        self.exported: typing.Final[bool] = exported
 
         # Graph properties
         self._childs: list[typing.Self] = []
-        self._raw_visible_identifiers_cache: set[str] = set()
+        self._raw_visible_identifiers_cache: dict[str, typing.Self] = {}
 
         # Parent
         self._parent: typing.Self | None = parent
         if self._parent is not None:
-            self._parent._register_child(self)
+            self._parent.register_link(self)
 
     @typing.final
-    def _register_child(self, child: typing.Self):
+    def register_link(self, child: typing.Self):
         """
-        Register given `child` to this component.
-        You should pass `parent` when `child` is constructed,
-        instead of explicitly calling this.
+        Register given `child` as a link to this component.
+        Duplicated registration will cause an error.
         """
         self._childs.append(child)
         if (child_identifier := child.represented_identifier()) is not None:
-            if child_identifier in HARD_KEYWORDS:
-                raise errors.KeywordIdentifier(
-                    "%s can't be an identifier" % (child_identifier,)
-                )
-            self._raw_visible_identifiers_cache.add(child_identifier)
+            if child_identifier in self._raw_visible_identifiers_cache:
+                raise errors.IdenfitierCollision(child_identifier)
+            self._raw_visible_identifiers_cache[child_identifier] = child
 
     def represented_identifier(self) -> str | None:
         """
@@ -62,6 +70,8 @@ class AbstractComponent:
         If this component is something like variable definition,
         function definition, namespace block, etc, then
         this component should return a proper identifier string.
+        If the result of this method is `None`,
+        then this component does not have any identifier.
         """
         return None
 
@@ -83,6 +93,50 @@ class AbstractComponent:
             raise errors.AuthorAlreadySet(name=name, email=email)
         self._author_name = name
         self._author_email = name
+
+    def get_author(self, make_cache: bool = False) -> tuple[str, str] | None:
+        """
+        Get author name and email. If no author is available, return `None`.
+        This method also does caching if you want.
+        """
+        if self._author_name is not None and self._author_email is not None:
+            return (self._author_name, self._author_email)
+        elif self._parent is None:
+            return None
+        else:
+            author_info = self._parent.get_author(make_cache=make_cache)
+            if author_info is not None and make_cache:
+                self._author_name, self._author_email = author_info
+            return author_info
+
+    def find_by_identifiers(
+        self, *namespaced_identifier: str, inner_propagation_started: bool = False
+    ) -> typing.Self:
+        """
+        Try to find correct component with given namespaced identifiers.
+        This tried to find given identifier from all ancestors,
+        therefore in some cases performance may be slow.
+        """
+        if not namespaced_identifier:  # No identifier == self
+            return self
+
+        try:  # If directly found from children, try with no backward propagation
+            if namespaced_identifier[0] in self._raw_visible_identifiers_cache:
+                child = self._raw_visible_identifiers_cache[namespaced_identifier[0]]
+                # Search only when either
+                # inner propagation is not start yet, or child is exported
+                if not inner_propagation_started or child.exported:
+                    return child.find_by_identifiers(
+                        *namespaced_identifier[1:], inner_propagation_started=True
+                    )
+        except errors.IdentifierNotFound:
+            pass
+
+        # Go to upper identifier and try again, if able to move
+        if self._parent is not None and not inner_propagation_started:
+            return self._parent.find_by_identifiers(*namespaced_identifier)
+        else:
+            raise errors.IdentifierNotFound("::".join(namespaced_identifier))
 
 
 # Mapping of generic identifiers and its information.
@@ -111,9 +165,6 @@ class AbstractDefinition(AbstractComponent):
     """
     Represents a definition of a variable, function,
     struct, alias, enum, namespace, etc.
-
-    If `generic` is an empty dict, then this object
-    is considered as non-generic object.
     """
 
     def __init__(
@@ -124,6 +175,10 @@ class AbstractDefinition(AbstractComponent):
         description: str = "",
         **kwargs,
     ) -> None:
+        """
+        If `generic` is an empty dict, then this object
+        is considered as non-generic object.
+        """
         super().__init__(component_name=identifier, **kwargs)
         self._generic: GENERIC_PARAMETERS = self._verify_generic_parameters(generic)
         self._description: str = description

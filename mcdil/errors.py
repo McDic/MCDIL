@@ -8,7 +8,7 @@ from pathlib import Path
 from lark import ParseTree, Token
 from yarl import URL
 
-from .context import CompilationLocation, get_global_compilation_location
+from .context import CompilationLocation, get_global_cl
 
 
 class MCDILError(Exception):
@@ -35,7 +35,7 @@ class CompilationError(MCDILError):
     """
 
     def __init__(self, message: str, *, CL: CompilationLocation | None = None) -> None:
-        self._CL = CL or get_global_compilation_location()
+        self._CL = CL or get_global_cl()
         super().__init__(
             "Compile error; %s" % (message,)
             if self._CL is None

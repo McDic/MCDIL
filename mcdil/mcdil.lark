@@ -190,7 +190,7 @@ branch: if_block ("else" if_block)* else_block?
 
 importing: "=" "import" STRING
 
-namespace: PUBLIC_QUALIFIER? "namespace" namespaced_identifier (general_block | importing)
+namespace: PUBLIC_QUALIFIER? "namespace" IDENTIFIER (general_block | importing)
 
 // ----------------------------------------------------------------------------
 // Execute

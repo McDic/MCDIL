@@ -4,6 +4,12 @@ export function some_function(bool x) -> null {
     };
 };
 
+/*
+    WOW THIS IS A COMMENT
+*/
+
+// WOW THIS IS ANOTHER COMMENT
+
 namespace level1 {
     namespace level2 {
         namespace this {
@@ -11,3 +17,7 @@ namespace level1 {
         };
     };
 };
+
+export namespace wow {};
+
+namespace sibling = import "../test1.mcdil";
